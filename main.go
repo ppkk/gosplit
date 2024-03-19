@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http/httputil"
+	"net/url"
+	"os"
 	"strconv"
 	"sync"
 
@@ -45,16 +48,25 @@ func readProject(c *gin.Context) {
 func main() {
 	r := gin.Default()
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
+	isMaster := os.Getenv("IS_MASTER") == "true"
+
+	if isMaster {
+		r.GET("/ping", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"message": "pong",
+			})
 		})
-	})
 
-	eqh := r.Group("/eqh")
-
-	eqh.POST("/createProject", createProject)
-	eqh.GET("/:id/readProject", readProject)
+		apiURL, _ := url.Parse("http://api:8080")
+		proxy := httputil.NewSingleHostReverseProxy(apiURL)
+		r.Any("/eqh/*action", gin.WrapH(proxy))
+	} else {
+		eqh := r.Group("/eqh")
+		{
+			eqh.POST("/createProject", createProject)
+			eqh.GET("/:id/readProject", readProject)
+		}
+	}
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }
